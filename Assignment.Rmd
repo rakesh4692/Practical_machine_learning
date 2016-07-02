@@ -1,0 +1,123 @@
+---
+title: "Assignment"
+author: "Rakesh Patel"
+date: "June 30, 2016"
+output: html_document
+---
+### Introduction
+
+*In this project, we will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participant They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.*
+*The five ways are exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Only Class A corresponds to correct performance.*
+
+The goal of this project is to predict the manner in which they did the exercise, i.e., Class A to E. More information is available from the website
+[here] (http://groupware.les.inf.puc-rio.br/har)
+
+### Loading different packages 
+```{r message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+library(rattle)
+```
+
+
+## reading the test and train datasets
+
+```{r }
+setwd("E:/Documents/Network/R/8")
+train_data<-read.csv("pml-training.csv",na.strings = c("","NA","NULL"))
+test_data<-read.csv("pml-testing.csv",na.strings = c("","NA","NULL"))
+dim(train_data)
+dim(test_data)
+```
+
+## Cleaning the data
+
+1. Removing columns which has all NA values
+``` {r}
+train_data_clean1<-train_data[,colSums(is.na(train_data))==0]
+dim(train_data_clean1)
+```
+
+2. Removing columns which are totally meaningless for our model.
+
+``` {r}
+drops<-c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","new_window","num_window")
+#drops<-names(train_data_clean1)[1:7]
+drops
+train_data_clean2<-train_data_clean1[,-which(names(train_data_clean1) %in% drops)]
+dim(train_data_clean2)
+```
+
+3. Removing zero Covariates
+
+``` {r}
+nsv<-nearZeroVar(train_data_clean2[sapply(train_data_clean2,is.numeric)],saveMetrics = TRUE)
+#sapply to go only with columns which columns have numeric class
+train_data_clean2_nsv<-train_data_clean2[,nsv[,"nzv"]==0]
+dim(train_data_clean2_nsv)
+```
+
+4. Removing highly correlated variables with 80% or more correlation
+
+``` {r}
+cor_matrix<-cor(na.omit(train_data_clean2_nsv[sapply(train_data_clean2_nsv, is.numeric)]))
+dim(cor_matrix)
+dropping_corr<-findCorrelation(cor_matrix,cutoff = 0.80,verbose = TRUE)
+train_data_clean2_nsv_non_cor<-train_data_clean2_nsv[,-dropping_corr]
+dim(train_data_clean2_nsv_non_cor)
+```
+
+## splitting dataset for training and testing
+
+``` {r}
+inTrain<-createDataPartition(y=train_data_clean2_nsv_non_cor$classe,p=0.7)[[1]]
+training<-train_data_clean2_nsv_non_cor[inTrain,]
+dim(training)
+testing<-train_data_clean2_nsv_non_cor[-inTrain,]
+dim(testing)
+```
+
+
+## Using rpart method ,considering k=5 when doing k-fold cross validation 
+
+``` {r}
+control <- trainControl(method = "cv", number = 5)
+mod_rpart<-train(classe ~ . , data=training,method="rpart",trControl = control)
+print(mod_rpart)
+fancyRpartPlot(mod_rpart$finalModel)
+pred_rpart<-predict(mod_rpart,testing)
+confusionMatrix(pred_rpart,testing$classe)
+```
+
+## see the overall accuracy for rpart model
+``` {r}
+confusionMatrix(pred_rpart,testing$classe)$overall[1]
+```
+
+#### As you can see the accuracy is 0.492982 wich is less ,lets try randomforest method
+
+## Using randomforest Method
+
+``` {r}
+mod_rf<-train(classe ~ .,data = training,method="rf",ntree=100)
+pred_rf<-predict(mod_rf,testing)
+confusionMatrix(pred_rf,testing$classe)
+```
+
+## see the overall accuracy for randomForest model
+``` {r}
+confusionMatrix(pred_rf,testing$classe)$overall[1]
+```
+
+## accuracy is pretty good so we go with Randomforest Method
+
+## Now getting results for our given testing_data using randomforest model
+
+``` {r}
+dim(test_data)
+Results<-predict(mod_rf,test_data)
+Results
+```
+
+So,for given 20 observation of test_data the above is our predicted result.
+
